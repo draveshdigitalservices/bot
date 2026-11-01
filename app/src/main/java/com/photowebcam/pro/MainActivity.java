@@ -42,6 +42,7 @@ public class MainActivity extends Activity {
     private ImageView preview, sceneThumb;
     private SeekBar zoomSeek;
     private TextView zoomValue;
+    private float canvasZoom=1f;
     private TextView urlText,statusText,sceneName,emptyText;
     private Photo selected;
     private volatile boolean live=false;
@@ -141,11 +142,10 @@ public class MainActivity extends Activity {
         zoomIn.setOnClickListener(v->changeZoom(0.25f));
         zoomSeek.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener(){
             public void onProgressChanged(android.widget.SeekBar bar,int progress,boolean fromUser){
-                if(fromUser&&selected!=null){
-                    selected.zoom=1f+(progress/100f);
-                    renderZoom(selected);
-                    zoomValue.setText(Math.round(selected.zoom*100)+"%");
-                    if(preview!=null)preview.setImageBitmap(selected.bitmap);
+                if(fromUser&&!photos.isEmpty()){
+                    setCanvasZoom(1f+(progress/100f));
+                    zoomValue.setText(Math.round(canvasZoom*100)+"%");
+                    if(preview!=null&&selected!=null)preview.setImageBitmap(selected.bitmap);
                 }
             }
             public void onStartTrackingTouch(android.widget.SeekBar bar){}
@@ -208,14 +208,22 @@ public class MainActivity extends Activity {
     }
     private void pickPhotos(){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("image/*");i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,44);}
     @Override protected void onActivityResult(int req,int result,Intent data){super.onActivityResult(req,result,data);if(req!=44||result!=RESULT_OK||data==null)return;try{if(data.getClipData()!=null){for(int n=0;n<data.getClipData().getItemCount();n++)addPhoto(data.getClipData().getItemAt(n).getUri());}else if(data.getData()!=null)addPhoto(data.getData());refresh();}catch(Exception e){Toast.makeText(this,"Photo could not be loaded",Toast.LENGTH_SHORT).show();}}
-    private void addPhoto(Uri u){try{getContentResolver().takePersistableUriPermission(u,Intent.FLAG_GRANT_READ_URI_PERMISSION);String name="Photo "+(photos.size()+1);try(android.database.Cursor c=getContentResolver().query(u,null,null,null,null)){if(c!=null&&c.moveToFirst()){int ix=c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);if(ix>=0)name=c.getString(ix);}}InputStream in=getContentResolver().openInputStream(u);Bitmap b=BitmapFactory.decodeStream(in);if(in!=null)in.close();if(b!=null){Bitmap scaled=scaleForStream(b,1280,720);ByteArrayOutputStream encoded=new ByteArrayOutputStream();scaled.compress(Bitmap.CompressFormat.JPEG,82,encoded);Photo p=new Photo(u,name,scaled,encoded.toByteArray());photos.add(p);if(selected==null){selected=p;activePhoto=p;}if(b!=scaled&&!b.isRecycled())b.recycle();}}catch(Exception ignored){}}
-    private void changeZoom(float delta){
-        if(selected==null||!selected.visible){toast("Pehle photo layer select karein");return;}
-        float next=Math.max(1f,Math.min(3f,selected.zoom+delta));
-        if(Math.abs(next-selected.zoom)<0.001f){toast(next>=3f?"Maximum zoom 3x":"Minimum zoom 1x");return;}
-        selected.zoom=next;renderZoom(selected);refresh();toast("Zoom "+String.format(java.util.Locale.US,"%.2fx",next));
+    private void addPhoto(Uri u){try{getContentResolver().takePersistableUriPermission(u,Intent.FLAG_GRANT_READ_URI_PERMISSION);String name="Photo "+(photos.size()+1);try(android.database.Cursor c=getContentResolver().query(u,null,null,null,null)){if(c!=null&&c.moveToFirst()){int ix=c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);if(ix>=0)name=c.getString(ix);}}InputStream in=getContentResolver().openInputStream(u);Bitmap b=BitmapFactory.decodeStream(in);if(in!=null)in.close();if(b!=null){Bitmap scaled=scaleForStream(b,1280,720);ByteArrayOutputStream encoded=new ByteArrayOutputStream();scaled.compress(Bitmap.CompressFormat.JPEG,82,encoded);Photo p=new Photo(u,name,scaled,encoded.toByteArray());photos.add(p);if(selected==null){selected=p;activePhoto=p;}if(canvasZoom>1f){p.zoom=canvasZoom;renderZoom(p);}if(b!=scaled&&!b.isRecycled())b.recycle();}}catch(Exception ignored){}}
+    // One canvas zoom factor is applied to every media layer, not just the selected photo.
+    private void setCanvasZoom(float value){
+        canvasZoom=Math.max(1f,Math.min(3f,value));
+        for(Photo photo:photos){photo.zoom=canvasZoom;renderZoom(photo);}
+        if(zoomValue!=null)zoomValue.setText(Math.round(canvasZoom*100)+"%");
+        if(zoomSeek!=null){int progress=Math.round((canvasZoom-1f)*100);if(zoomSeek.getProgress()!=progress)zoomSeek.setProgress(progress);}
+        syncActive();
     }
-    private void resetZoom(){if(selected==null){toast("Pehle photo layer select karein");return;}selected.zoom=1f;renderZoom(selected);refresh();toast("Zoom reset 1x");}
+    private void changeZoom(float delta){
+        if(photos.isEmpty()){toast("Pehle photo add karein");return;}
+        float next=Math.max(1f,Math.min(3f,canvasZoom+delta));
+        if(Math.abs(next-canvasZoom)<0.001f){toast(next>=3f?"Maximum zoom 3x":"Minimum zoom 1x");return;}
+        setCanvasZoom(next);refresh();toast("Full canvas zoom "+String.format(java.util.Locale.US,"%.2fx",next));
+    }
+    private void resetZoom(){if(photos.isEmpty()){toast("Pehle photo add karein");return;}setCanvasZoom(1f);refresh();toast("Full canvas reset 1x");}
     private void renderZoom(Photo p){
         try{
             Bitmap base=p.baseBitmap;int w=base.getWidth(),h=base.getHeight();
@@ -229,7 +237,7 @@ public class MainActivity extends Activity {
     }
     private void ensureSelection(){if(selected==null||!selected.visible){selected=null;for(Photo p:photos)if(p.visible){selected=p;break;}}syncActive();}
     private void syncActive(){activePhoto=(selected!=null&&selected.visible)?selected:null;}
-    private void refresh(){if(layerList==null)return;ensureSelection();layerList.removeAllViews();emptyText.setVisibility(photos.isEmpty()?View.VISIBLE:View.GONE);if(selected!=null){if(sceneThumb!=null)sceneThumb.setImageBitmap(selected.bitmap);if(preview!=null)preview.setImageBitmap(selected.bitmap);if(zoomSeek!=null)zoomSeek.setProgress(Math.max(0,Math.min(200,Math.round((selected.zoom-1f)*100))));if(zoomValue!=null)zoomValue.setText(Math.round(selected.zoom*100)+"%");}else{if(sceneThumb!=null)sceneThumb.setImageDrawable(null);if(preview!=null)preview.setImageDrawable(null);if(zoomSeek!=null)zoomSeek.setProgress(0);if(zoomValue!=null)zoomValue.setText("100%");}
+    private void refresh(){if(layerList==null)return;ensureSelection();layerList.removeAllViews();emptyText.setVisibility(photos.isEmpty()?View.VISIBLE:View.GONE);if(selected!=null){if(sceneThumb!=null)sceneThumb.setImageBitmap(selected.bitmap);if(preview!=null)preview.setImageBitmap(selected.bitmap);if(zoomSeek!=null)zoomSeek.setProgress(Math.max(0,Math.min(200,Math.round((canvasZoom-1f)*100))));if(zoomValue!=null)zoomValue.setText(Math.round(canvasZoom*100)+"%");}else{if(sceneThumb!=null)sceneThumb.setImageDrawable(null);if(preview!=null)preview.setImageDrawable(null);if(zoomSeek!=null)zoomSeek.setProgress(0);if(zoomValue!=null)zoomValue.setText(Math.round(canvasZoom*100)+"%");}
         for(Photo p:new ArrayList<>(photos)){LinearLayout row=horiz();row.setBackgroundColor(panel2);row.setPadding(dp(3),dp(3),dp(3),dp(3));LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,dp(58));rp.bottomMargin=dp(6);layerList.addView(row,rp);
             TextView type=txt("▧",21,cyan,true);type.setGravity(Gravity.CENTER);row.addView(type,new LinearLayout.LayoutParams(dp(30),-1));TextView name=txt(p.name,12,white,true);name.setSingleLine(true);name.setPadding(dp(5),0,dp(2),0);name.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(0,-1,1);np.leftMargin=dp(3);name.setGravity(Gravity.CENTER_VERTICAL);name.setHintTextColor(muted);row.addView(name,np);
             name.setOnClickListener(v->renamePhoto(p));

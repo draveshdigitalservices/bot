@@ -18,7 +18,8 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;\nimport android.widget.SeekBar;
+import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -38,7 +39,9 @@ public class MainActivity extends Activity {
     private final int bg=Color.rgb(3,12,35), panel=Color.rgb(5,28,67), panel2=Color.rgb(9,45,99), blue=Color.rgb(0,125,255), cyan=Color.rgb(0,210,255), green=Color.rgb(0,190,65), red=Color.rgb(235,35,55), white=Color.WHITE, muted=Color.rgb(170,195,230);
     private final ArrayList<Photo> photos=new ArrayList<>();
     private LinearLayout root, layerList;
-    private ImageView preview, sceneThumb;\n    private SeekBar zoomSeek;\n    private TextView zoomValue;
+    private ImageView preview, sceneThumb;
+    private SeekBar zoomSeek;
+    private TextView zoomValue;
     private TextView urlText,statusText,sceneName,emptyText;
     private Photo selected;
     private volatile boolean live=false;

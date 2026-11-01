@@ -49,8 +49,23 @@ class MainActivity : Activity() {
         scroll.addView(page)
         setContentView(scroll)
 
-        page.addView(label("PHONE WEBCAM PRO", 25, Color.WHITE, true))
-        page.addView(label("Multiple Photos • Multiple Videos • PC Live", 13, Color.LTGRAY))
+        val brandRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val brandLogo = ImageView(this).apply {
+            setImageResource(com.phonewebcam.app.R.drawable.ic_phone_webcam_logo)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        }
+        brandRow.addView(brandLogo, LinearLayout.LayoutParams(dp(52), dp(52)))
+        val brandText = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), 0, 0, 0)
+            addView(label("PHONE WEBCAM PRO", 23, Color.WHITE, true))
+            addView(label("HD MULTI CAMERA • PC CONNECT", 11, Color.rgb(185, 210, 255), true))
+        }
+        brandRow.addView(brandText, LinearLayout.LayoutParams(0, -2, 1f))
+        page.addView(brandRow)
         page.addView(space(14))
 
         val addRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }

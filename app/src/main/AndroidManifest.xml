@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
-    <application android:allowBackup="false" android:label="Phone Webcam Multi"
+    <application android:allowBackup="false" android:label="Phone Webcam Pro" android:icon="@drawable/ic_phone_webcam_logo"
         android:theme="@style/AppTheme" android:usesCleartextTraffic="true">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>

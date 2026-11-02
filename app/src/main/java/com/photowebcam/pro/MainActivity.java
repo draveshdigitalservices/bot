@@ -28,6 +28,9 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
+import android.widget.AdapterView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -50,6 +53,8 @@ public class MainActivity extends Activity {
     private CanvasPreview preview;
     private ImageView sceneThumb;
     private SeekBar zoomSeek;
+    private Spinner resolutionSpinner;
+    private int outputWidth=960, outputHeight=540;
     private TextView zoomValue;
     private float canvasZoom=1f;
     private TextView urlText,statusText,sceneName,emptyText;
@@ -115,12 +120,36 @@ public class MainActivity extends Activity {
         cp.topMargin=dp(5);root.addView(previewCard,cp);
         LinearLayout previewHead=horiz();
         previewHead.addView(txt("LIVE PREVIEW",14,white,true),new LinearLayout.LayoutParams(0,dp(34),1));
-        TextView res=txt("960 × 540",10,cyan,true);
-        previewHead.addView(res);
+        TextView resLabel=txt("RES:",10,cyan,true);
+        previewHead.addView(resLabel);
+        resolutionSpinner=new Spinner(this);
+        String[] resolutions={"640x360","848x480","960x540","1280x720"};
+        ArrayAdapter<String> resolutionAdapter=new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,resolutions){
+            @Override public android.view.View getView(int position,android.view.View convertView,android.view.ViewGroup parent){
+                TextView v=(TextView)super.getView(position,convertView,parent);v.setTextColor(white);v.setTextSize(11);v.setPadding(dp(5),0,dp(5),0);return v;
+            }
+            @Override public android.view.View getDropDownView(int position,android.view.View convertView,android.view.ViewGroup parent){
+                TextView v=(TextView)super.getDropDownView(position,convertView,parent);v.setTextColor(Color.BLACK);v.setTextSize(14);v.setPadding(dp(18),dp(8),dp(18),dp(8));
+                v.setBackgroundColor(position==2?blue:Color.WHITE);if(position==2)v.setTextColor(Color.WHITE);return v;
+            }
+        };
+        resolutionAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        resolutionSpinner.setAdapter(resolutionAdapter);
+        resolutionSpinner.setSelection(2);
+        LinearLayout.LayoutParams resSpinLp=new LinearLayout.LayoutParams(dp(112),dp(38));
+        previewHead.addView(resolutionSpinner,resSpinLp);
+        resolutionSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
+            public void onItemSelected(AdapterView<?> parent,View view,int position,long id){
+                int[][] sizes={{640,360},{848,480},{960,540},{1280,720}};
+                outputWidth=sizes[position][0];outputHeight=sizes[position][1];
+                updateStreamFrame();
+            }
+            public void onNothingSelected(AdapterView<?> parent){}
+        });
         previewCard.addView(previewHead);
         preview=new CanvasPreview();
         preview.setBackgroundColor(Color.rgb(2,8,20));
-        LinearLayout.LayoutParams pp=new LinearLayout.LayoutParams(-1,dp(220));
+        LinearLayout.LayoutParams pp=new LinearLayout.LayoutParams(-1,dp(260));
         pp.topMargin=dp(5);previewCard.addView(preview,pp);
         TextView previewHint=txt("Select a media layer to edit its preview",10,muted,false);
         previewHint.setGravity(Gravity.CENTER);
@@ -248,20 +277,28 @@ public class MainActivity extends Activity {
     }
     private void updateStreamFrame(){
         if(preview==null||selected==null)return;
-        byte[] frame=preview.renderJpeg(960,540);
+        byte[] frame=preview.renderJpeg(outputWidth,outputHeight);
         if(frame!=null){selected.jpeg=frame;selected.bitmap=preview.getPhotoBitmap();}
         activePhoto=(selected!=null&&selected.visible)?selected:null;
     }
 
     private class CanvasPreview extends View {
         private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
+        private final Paint selectionPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
         private Bitmap photoBitmap;
         private Photo currentPhoto;
         private final Matrix matrix=new Matrix();
         private float zoom=1f, lastX,lastY, startDist=0f, startZoom=1f;
         private float baseLeft,baseTop,baseW,baseH;
         private boolean dragging=false;
-        CanvasPreview(){super(MainActivity.this);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
+        private boolean selectionVisible=false;
+        CanvasPreview(){
+            super(MainActivity.this);
+            setLayerType(View.LAYER_TYPE_SOFTWARE,null);
+            selectionPaint.setColor(Color.rgb(0,145,255));
+            selectionPaint.setStyle(Paint.Style.STROKE);
+            selectionPaint.setStrokeWidth(dp(2));
+        }
         private void saveCurrentTransform(){
             if(currentPhoto==null)return;
             currentPhoto.zoom=zoom;
@@ -273,6 +310,7 @@ public class MainActivity extends Activity {
             saveCurrentTransform();
             currentPhoto=p;
             photoBitmap=(p!=null&&p.visible)?p.baseBitmap:null;
+            selectionVisible=false;
             if(p!=null){
                 zoom=Math.max(1f,Math.min(2f,p.zoom));
                 matrix.setValues(p.transform);
@@ -304,12 +342,34 @@ public class MainActivity extends Activity {
             baseLeft=(getWidth()-baseW)/2f;baseTop=(getHeight()-baseH)/2f;
             c.save();c.concat(matrix);
             RectF dst=new RectF(baseLeft,baseTop,baseLeft+baseW,baseTop+baseH);
-            c.drawBitmap(photoBitmap,null,dst,paint);c.restore();
+            c.drawBitmap(photoBitmap,null,dst,paint);
+            // Show a blue four-sided selection frame after the user taps the photo.
+            if(selectionVisible){
+                c.drawRect(dst,selectionPaint);
+                Paint handles=new Paint(Paint.ANTI_ALIAS_FLAG);
+                handles.setColor(Color.WHITE);
+                handles.setStyle(Paint.Style.FILL);
+                float r=dp(4);
+                c.drawCircle(dst.left,dst.top,r,handles);
+                c.drawCircle(dst.right,dst.top,r,handles);
+                c.drawCircle(dst.left,dst.bottom,r,handles);
+                c.drawCircle(dst.right,dst.bottom,r,handles);
+                handles.setColor(Color.rgb(0,145,255));
+                handles.setStyle(Paint.Style.STROKE);
+                handles.setStrokeWidth(dp(1.5f));
+                c.drawCircle(dst.left,dst.top,r,handles);
+                c.drawCircle(dst.right,dst.top,r,handles);
+                c.drawCircle(dst.left,dst.bottom,r,handles);
+                c.drawCircle(dst.right,dst.bottom,r,handles);
+            }
+            c.restore();
         }
         @Override public boolean onTouchEvent(MotionEvent e){
             if(photoBitmap==null)return true;
             switch(e.getActionMasked()){
                 case MotionEvent.ACTION_DOWN:
+                    selectionVisible=true;
+                    invalidate();
                     lastX=e.getX();lastY=e.getY();dragging=true;return true;
                 case MotionEvent.ACTION_POINTER_DOWN:
                     if(e.getPointerCount()>=2){startDist=distance(e);startZoom=zoom;}return true;

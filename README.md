@@ -21,3 +21,7 @@ Open the project in Android Studio and run `assembleDebug`, or push it to GitHub
 
 ## Connect
 Connect phone and PC to the same Wi-Fi/hotspot, add photos, keep the desired layer visible, tap Start Live, and use the displayed `http://PHONE-IP:8080/stream` URL in OBS/SplitCam. Keep the app open and phone awake while streaming. This is an MJPEG network stream, not a USB UVC webcam device.
+
+
+## Stream resolution selector
+Choose 640x360, 848x480, 960x540, or 1280x720 from the RES dropdown above the preview. The selected resolution is used for the live MJPEG stream and updates immediately.
